@@ -1,110 +1,96 @@
 import streamlit as st
 import tensorflow as tf
 import numpy as np
-from keras.preprocessing import image
+from PIL import Image
 import gdown
 import os
 
-# --- Custom CSS Styling ---
-st.markdown("""
+# --- CSS Styling ---
+st.markdown(
+    """
     <style>
+    /* Background gradient */
     .stApp {
-        background-color: #f8fafc;
-        font-family: "Segoe UI", sans-serif;
+        background: linear-gradient(135deg, #1d2b64, #f8cdda);
+        color: white;
+        font-family: 'Segoe UI', sans-serif;
     }
+
+    /* Title styling */
     h1 {
-        color: #0f172a;
         text-align: center;
         font-size: 2.5rem;
-        font-weight: bold;
+        font-weight: 700;
+        color: #ffffff;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+        margin-bottom: 1rem;
     }
-    h2, h3 {
-        color: #334155;
-        font-weight: 600;
-    }
+
+    /* Upload box styling */
     .stFileUploader {
-        border: 2px dashed #3b82f6;
-        background-color: #eff6ff;
+        border: 2px dashed #fff !important;
+        border-radius: 15px;
         padding: 20px;
-        border-radius: 12px;
+        background-color: rgba(255,255,255,0.1);
+        margin-bottom: 1.5rem;
     }
-    .stButton button {
-        background-color: #3b82f6;
-        color: white;
-        border-radius: 12px;
-        padding: 0.6em 1.2em;
+
+    /* Buttons */
+    button[kind="primary"] {
+        background: linear-gradient(90deg, #ff512f, #dd2476);
+        color: white !important;
         font-weight: bold;
+        border-radius: 12px;
+        padding: 0.6rem 1.2rem;
         transition: 0.3s;
     }
-    .stButton button:hover {
-        background-color: #2563eb;
+
+    button[kind="primary"]:hover {
         transform: scale(1.05);
+        background: linear-gradient(90deg, #dd2476, #ff512f);
     }
-    .prediction-box {
-        background-color: #ffffff;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        text-align: center;
-        margin-top: 20px;
-    }
-    .normal {
-        color: #16a34a;
-        font-size: 1.5rem;
-        font-weight: bold;
-    }
-    .pneumonia {
-        color: #dc2626;
-        font-size: 1.5rem;
-        font-weight: bold;
+
+    /* Uploaded image preview */
+    img {
+        border-radius: 20px;
+        box-shadow: 0px 8px 20px rgba(0,0,0,0.3);
     }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-# --- Step 1: Download model from Google Drive if not exists ---
-file_id = "1HaeB7vzHUEbIpIRuICOIOpbAbDVNLMBD"  # Your model file ID
-url = f"https://drive.google.com/uc?id={file_id}"
-model_path = "pneumonia_detector.h5"
+# --- Title ---
+st.title("🩺 Pneumonia Detection from Chest X-ray")
 
+# --- Download model from Google Drive ---
+model_path = "pneumonia_model.h5"
 if not os.path.exists(model_path):
-    with st.spinner("📥 Downloading model... Please wait."):
-        gdown.download(url, model_path, quiet=False)
+    with st.spinner("Downloading model... Please wait."):
+        gdown.download(
+            "https://drive.google.com/uc?id=1fN_WBaN6z8cnT2Yg4w1lwHgKk9sTprls",
+            model_path,
+            quiet=False
+        )
 
-# --- Step 2: Load Model ---
-@st.cache_resource
-def load_model():
-    return tf.keras.models.load_model(model_path)
+# Load model
+model = tf.keras.models.load_model(model_path)
 
-model = load_model()
-
-# --- Step 3: App UI ---
-st.title("🩺 Pneumonia Detection from Chest X-Ray")
-st.write("Upload a chest X-ray image, and the model will predict if it's **Normal** or **Pneumonia**.")
-
-# File uploader
+# --- File uploader ---
 uploaded_file = st.file_uploader("📂 Upload Chest X-ray Image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file is not None:
-    # Load image
-    img = image.load_img(uploaded_file, target_size=(224, 224))
-    st.image(img, caption="Uploaded X-ray", use_column_width=True)
+    image = Image.open(uploaded_file).convert("RGB")
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
     # Preprocess
-    img_array = image.img_to_array(img)
-    img_array = np.expand_dims(img_array, axis=0) / 255.0
+    img_resized = image.resize((224, 224))
+    img_array = np.array(img_resized) / 255.0
+    img_array = np.expand_dims(img_array, axis=0)
 
     # Prediction
     prediction = model.predict(img_array)
-    prob = float(prediction[0][0])
-    result = "PNEUMONIA" if prob > 0.5 else "NORMAL"
+    result = "Pneumonia Detected 🛑" if prediction[0][0] > 0.5 else "Normal ✅"
 
-    # Display prediction with styled box
-    if result == "NORMAL":
-        st.markdown(f"<div class='prediction-box'><p class='normal'>Prediction: {result}</p></div>", unsafe_allow_html=True)
-    else:
-        st.markdown(f"<div class='prediction-box'><p class='pneumonia'>Prediction: {result}</p></div>", unsafe_allow_html=True)
-
-    # Confidence bar
-    st.write("### 📊 Confidence")
-    st.progress(prob if result == "PNEUMONIA" else 1 - prob)
-    st.write(f"**Probability (Pneumonia): {prob:.2f}**")
+    st.subheader("🔎 Prediction Result:")
+    st.success(result if result == "Normal ✅" else result)
